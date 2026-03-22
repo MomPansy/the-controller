@@ -33,6 +33,7 @@ export interface SessionConfig {
   initial_prompt: string | null;
   auto_worker_session: boolean;
   notify_on_idle: boolean;
+  mute_sound: boolean;
 }
 
 export interface MaintainerConfig {
@@ -113,6 +114,7 @@ export interface Project {
   prompts: SavedPrompt[];
   staged_sessions: StagedSession[];
   notify_on_idle: boolean;
+  mute_sound: boolean;
 }
 
 export interface CorruptProjectEntry {
@@ -300,9 +302,14 @@ function createPersistedBoolean(key: string, defaultValue: boolean) {
 }
 
 export const globalNotifyOnIdle = createPersistedBoolean("notify_on_idle_global", true);
+export const globalMuteSound = createPersistedBoolean("mute_sound_global", false);
 
 export function shouldNotify(globalEnabled: boolean, projectEnabled: boolean, sessionEnabled: boolean): boolean {
   return globalEnabled && projectEnabled && sessionEnabled;
+}
+
+export function shouldMuteSound(globalMuted: boolean, projectMuted: boolean, sessionMuted: boolean): boolean {
+  return globalMuted || projectMuted || sessionMuted;
 }
 
 export function dispatchHotkeyAction(action: NonNullable<HotkeyAction>) {

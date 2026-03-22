@@ -20,6 +20,8 @@ pub struct Project {
     pub staged_sessions: Vec<StagedSession>,
     #[serde(default = "default_true")]
     pub notify_on_idle: bool,
+    #[serde(default)]
+    pub mute_sound: bool,
 }
 
 /// Tracks staging state: which session is running as a separate
@@ -75,6 +77,8 @@ pub struct SessionConfig {
     pub auto_worker_session: bool,
     #[serde(default = "default_true")]
     pub notify_on_idle: bool,
+    #[serde(default)]
+    pub mute_sound: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -275,9 +279,9 @@ mod tests {
                 github_issue: None,
                 initial_prompt: None,
                 done_commits: vec![],
-                auto_worker_session: false, notify_on_idle: true,
+                auto_worker_session: false, notify_on_idle: true, mute_sound: false,
             }],
-            staged_sessions: vec![], notify_on_idle: true,
+            staged_sessions: vec![], notify_on_idle: true, mute_sound: false,
         };
 
         let json = serde_json::to_string(&project).expect("serialize");
@@ -333,9 +337,9 @@ mod tests {
                 github_issue: None,
                 initial_prompt: None,
                 done_commits: vec![],
-                auto_worker_session: false, notify_on_idle: true,
+                auto_worker_session: false, notify_on_idle: true, mute_sound: false,
             }],
-            staged_sessions: vec![], notify_on_idle: true,
+            staged_sessions: vec![], notify_on_idle: true, mute_sound: false,
         };
 
         let json = serde_json::to_string(&project).expect("serialize");
@@ -373,7 +377,7 @@ mod tests {
             }),
             initial_prompt: None,
             done_commits: vec![],
-            auto_worker_session: false, notify_on_idle: true,
+            auto_worker_session: false, notify_on_idle: true, mute_sound: false,
         };
         let json = serde_json::to_string(&session).expect("serialize");
         let deserialized: SessionConfig = serde_json::from_str(&json).expect("deserialize");
@@ -410,7 +414,7 @@ mod tests {
             github_issue: None,
             initial_prompt: Some("fix the bug".to_string()),
             done_commits: vec![],
-            auto_worker_session: false, notify_on_idle: true,
+            auto_worker_session: false, notify_on_idle: true, mute_sound: false,
         };
         let json = serde_json::to_string(&session).expect("serialize");
         let deserialized: SessionConfig = serde_json::from_str(&json).expect("deserialize");
@@ -500,7 +504,7 @@ mod tests {
             auto_worker: AutoWorkerConfig::default(),
             prompts: vec![],
             sessions: vec![],
-            staged_sessions: vec![], notify_on_idle: true,
+            staged_sessions: vec![], notify_on_idle: true, mute_sound: false,
         };
         let json = serde_json::to_string(&project).expect("serialize");
         let deserialized: Project = serde_json::from_str(&json).expect("deserialize");
@@ -604,7 +608,7 @@ mod tests {
             auto_worker: AutoWorkerConfig { enabled: true },
             prompts: vec![],
             sessions: vec![],
-            staged_sessions: vec![], notify_on_idle: true,
+            staged_sessions: vec![], notify_on_idle: true, mute_sound: false,
         };
         let json = serde_json::to_string(&project).expect("serialize");
         let deserialized: Project = serde_json::from_str(&json).expect("deserialize");
@@ -702,7 +706,7 @@ mod tests {
                 pid: 99999,
                 port: 2420,
             }],
-            notify_on_idle: true,
+            notify_on_idle: true, mute_sound: false,
         };
         let json = serde_json::to_string(&project).expect("serialize");
         let deserialized: Project = serde_json::from_str(&json).expect("deserialize");
@@ -802,7 +806,7 @@ mod tests {
                 StagedSession { session_id: Uuid::new_v4(), pid: 1001, port: 2420 },
                 StagedSession { session_id: Uuid::new_v4(), pid: 1002, port: 2421 },
             ],
-            notify_on_idle: true,
+            notify_on_idle: true, mute_sound: false,
         };
         let json = serde_json::to_string(&project).expect("serialize");
         let deserialized: Project = serde_json::from_str(&json).expect("deserialize");
@@ -881,7 +885,7 @@ mod tests {
             prompts: vec![],
             sessions: vec![],
             staged_sessions: vec![],
-            notify_on_idle: false,
+            notify_on_idle: false, mute_sound: false,
         };
         let json = serde_json::to_string(&project).expect("serialize");
         let deserialized: Project = serde_json::from_str(&json).expect("deserialize");
@@ -901,7 +905,7 @@ mod tests {
             initial_prompt: None,
             done_commits: vec![],
             auto_worker_session: false,
-            notify_on_idle: false,
+            notify_on_idle: false, mute_sound: false,
         };
         let json = serde_json::to_string(&session).expect("serialize");
         let deserialized: SessionConfig = serde_json::from_str(&json).expect("deserialize");

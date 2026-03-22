@@ -471,7 +471,7 @@ mod tests {
             auto_worker: AutoWorkerConfig::default(),
             prompts: vec![],
             sessions: vec![],
-            staged_sessions: vec![], notify_on_idle: true,
+            staged_sessions: vec![], notify_on_idle: true, mute_sound: false,
         };
 
         state

@@ -147,6 +147,7 @@ pub fn run() {
             commands::toggle_voice_pause,
             commands::log_frontend_error,
             commands::set_notify_on_idle,
+            commands::set_mute_sound,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
