@@ -56,7 +56,7 @@ describe("command registry", () => {
   it("getHelpSections includes externally handled commands", () => {
     const sections = getHelpSections();
     const allKeys = sections.flatMap(s => s.entries.map(e => e.key));
-    expect(allKeys).toContain("Esc");
+    expect(allKeys).toContain("⌥Tab");
     expect(allKeys).toContain("⌘s");
     expect(allKeys).toContain("⌘k");
   });
@@ -128,7 +128,7 @@ describe("command registry", () => {
 
     const essentials = sections.find(s => s.label === "Essentials")!;
     expect(essentials.entries).toHaveLength(9);
-    expect(essentials.entries.map(e => e.key)).toEqual(["c", "j / k", "n", "d", "m", "f", "l / Enter", "Esc", "Esc Esc"]);
+    expect(essentials.entries.map(e => e.key)).toEqual(["c", "j / k", "n", "d", "m", "f", "l / Enter", "⌥Tab", "Esc Esc"]);
 
     expect(sections.find(s => s.label === "Navigation")).toBeUndefined();
 

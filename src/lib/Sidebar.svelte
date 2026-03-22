@@ -2,7 +2,7 @@
   import { fromStore, get } from "svelte/store";
   import { command, listen } from "$lib/backend";
   import { refreshProjectsFromBackend } from "./project-listing";
-  import { projects, activeSessionId, sessionStatuses, maintainerStatuses, maintainerErrors, autoWorkerStatuses, hotkeyAction, showKeyHints, focusTarget, expandedProjects, focusTerminalSoon, workspaceMode, activeNote, noteEntries, noteFolders, selectedSessionProvider, globalNotifyOnIdle, shouldNotify, type CorruptProjectEntry, type Project, type ProjectInventory, type FocusTarget, type SessionStatus, type MaintainerStatus, type AutoWorkerStatus, type NoteEntry } from "./stores";
+  import { projects, activeSessionId, sessionStatuses, maintainerStatuses, maintainerErrors, autoWorkerStatuses, hotkeyAction, showKeyHints, focusTarget, expandedProjects, focusTerminalSoon, workspaceMode, activeNote, noteEntries, noteFolders, selectedSessionProvider, globalNotifyOnIdle, globalMuteSound, shouldNotify, shouldMuteSound, type CorruptProjectEntry, type Project, type ProjectInventory, type FocusTarget, type SessionStatus, type MaintainerStatus, type AutoWorkerStatus, type NoteEntry } from "./stores";
   import { showToast } from "./toast";
   import { focusAfterSessionDelete, focusAfterProjectDelete } from "./focus-helpers";
   import { sendFinishBranchPrompt } from "./finish-branch";
@@ -20,6 +20,7 @@
   let sidebarEl: HTMLElement | undefined = $state();
   const showKeyHintsState = fromStore(showKeyHints);
   const globalNotifyState = fromStore(globalNotifyOnIdle);
+  const globalMuteSoundState = fromStore(globalMuteSound);
   let showNewProjectModal = $state(false);
   const expandedProjectsState = fromStore(expandedProjects);
   let expandedProjectSet: Set<string> = $derived(expandedProjectsState.current);
@@ -404,6 +405,29 @@
     await loadProjects();
   }
 
+  async function toggleProjectMuteSound(projectId: string) {
+    const project = projectList.find(p => p.id === projectId);
+    if (!project) return;
+    await command("set_mute_sound", {
+      projectId,
+      sessionId: null,
+      muted: !project.mute_sound,
+    });
+    await loadProjects();
+  }
+
+  async function toggleSessionMuteSound(sessionId: string, projectId: string) {
+    const project = projectList.find(p => p.id === projectId);
+    const session = project?.sessions.find(s => s.id === sessionId);
+    if (!session) return;
+    await command("set_mute_sound", {
+      projectId,
+      sessionId,
+      muted: !session.mute_sound,
+    });
+    await loadProjects();
+  }
+
   async function createSession(projectId: string, kind?: string) {
     try {
       const sessionId: string = await command("create_session", {
@@ -656,7 +680,7 @@
     }
   }
 
-  async function sendNotification(title: string, body: string) {
+  async function sendNotification(title: string, body: string, muted: boolean) {
     const isTauri = !!(window as any).__TAURI_INTERNALS__;
     if (isTauri) {
       try {
@@ -667,7 +691,7 @@
           granted = permission === "granted";
         }
         if (granted) {
-          tauriNotify({ title, body, sound: "default" });
+          tauriNotify(muted ? { title, body } : { title, body, sound: "default" });
         } else {
           console.warn("[notifications] Permission not granted, skipping notification");
         }
@@ -676,7 +700,7 @@
       }
     } else {
       if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-        new Notification(title, { body });
+        new Notification(title, { body, silent: muted });
       }
     }
   }
@@ -687,7 +711,8 @@
     const session = project.sessions.find(s => s.id === sessionId);
     if (!session) return;
     if (!shouldNotify(get(globalNotifyOnIdle), project.notify_on_idle, session.notify_on_idle)) return;
-    sendNotification("Session idle", `${project.name} / ${session.label} is waiting for input`);
+    const muted = shouldMuteSound(get(globalMuteSound), project.mute_sound, session.mute_sound);
+    sendNotification("Session idle", `${project.name} / ${session.label} is waiting for input`, muted);
   }
 
   // Request notification permission on startup
@@ -753,9 +778,12 @@
         {currentFocus}
         {getSessionStatus}
         globalNotifyEnabled={globalNotifyState.current}
+        globalMuteSoundEnabled={globalMuteSoundState.current}
         onToggleProject={toggleProject}
         onToggleProjectNotify={toggleProjectNotify}
         onToggleSessionNotify={toggleSessionNotify}
+        onToggleProjectMuteSound={toggleProjectMuteSound}
+        onToggleSessionMuteSound={toggleSessionMuteSound}
         onProjectFocus={(projectId) => {
           focusTarget.set({ type: "project", projectId });
         }}
@@ -788,6 +816,25 @@
         {/if}
       </svg>
     </button>
+    {#if globalNotifyState.current}
+      <button
+        class="btn-notify"
+        class:active={!globalMuteSoundState.current}
+        onclick={() => globalMuteSound.update(v => !v)}
+        title={globalMuteSoundState.current ? "Sound OFF (click to unmute)" : "Sound ON (click to mute)"}
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 5h2l3-3v12l-3-3H3V5z"/>
+          {#if globalMuteSoundState.current}
+            <line x1="11" y1="5" x2="15" y2="9"/>
+            <line x1="15" y1="5" x2="11" y2="9"/>
+          {:else}
+            <path d="M11 5c1 1 1.5 2 1.5 3s-.5 2-1.5 3"/>
+            <path d="M13 3c2 2 3 4 3 5s-1 3-3 5"/>
+          {/if}
+        </svg>
+      </button>
+    {/if}
     <button
       class="btn-help"
       class:active={showKeyHintsState.current}

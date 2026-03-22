@@ -14,6 +14,7 @@ import {
   workspaceMode,
   workspaceModePickerVisible,
   shouldNotify,
+  shouldMuteSound,
 } from './stores';
 
 describe('stores', () => {
@@ -125,6 +126,28 @@ describe('stores', () => {
 
     it('returns false when all toggles are disabled', () => {
       expect(shouldNotify(false, false, false)).toBe(false);
+    });
+  });
+
+  describe('shouldMuteSound', () => {
+    it('returns false when no level is muted', () => {
+      expect(shouldMuteSound(false, false, false)).toBe(false);
+    });
+
+    it('returns true when global is muted', () => {
+      expect(shouldMuteSound(true, false, false)).toBe(true);
+    });
+
+    it('returns true when project is muted', () => {
+      expect(shouldMuteSound(false, true, false)).toBe(true);
+    });
+
+    it('returns true when session is muted', () => {
+      expect(shouldMuteSound(false, false, true)).toBe(true);
+    });
+
+    it('returns true when all levels are muted', () => {
+      expect(shouldMuteSound(true, true, true)).toBe(true);
     });
   });
 });

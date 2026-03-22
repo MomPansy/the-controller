@@ -59,8 +59,8 @@ const testProject2 = makeProject(
   ],
 );
 
-function pressKey(key: string) {
-  window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+function pressKey(key: string, opts?: { altKey?: boolean }) {
+  window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, ...opts }));
 }
 
 function pressMetaKey(key: string) {
@@ -216,9 +216,9 @@ describe('HotkeyManager', () => {
       expect(get(hotkeyAction)).toBeNull();
     });
 
-    it('Escape with session focus moves to project focus', () => {
+    it('⌥Tab with session focus moves to project focus', () => {
       focusTarget.set({ type: 'session', sessionId: 'sess-1', projectId: 'proj-1' });
-      pressKey('Escape');
+      pressKey('Tab', { altKey: true });
       expect(get(focusTarget)).toEqual({ type: 'project', projectId: 'proj-1' });
     });
 
@@ -333,8 +333,8 @@ describe('HotkeyManager', () => {
       expect(get(hotkeyAction)).toBeNull();
     });
 
-    it('Escape sets focusTarget to active session', () => {
-      pressKey('Escape');
+    it('⌥Tab sets focusTarget to active session', () => {
+      pressKey('Tab', { altKey: true });
       expect(get(focusTarget)).toEqual({
         type: 'session',
         sessionId: 'sess-1',

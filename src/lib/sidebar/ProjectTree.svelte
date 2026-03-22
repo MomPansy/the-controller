@@ -8,9 +8,12 @@
     currentFocus: FocusTarget;
     getSessionStatus: (sessionId: string) => SessionStatus;
     globalNotifyEnabled: boolean;
+    globalMuteSoundEnabled: boolean;
     onToggleProject: (projectId: string) => void;
     onToggleProjectNotify: (projectId: string) => void;
     onToggleSessionNotify: (sessionId: string, projectId: string) => void;
+    onToggleProjectMuteSound: (projectId: string) => void;
+    onToggleSessionMuteSound: (sessionId: string, projectId: string) => void;
     onProjectFocus: (projectId: string) => void;
     onSessionFocus: (sessionId: string, projectId: string) => void;
     onSessionSelect: (sessionId: string, projectId: string) => void;
@@ -23,9 +26,12 @@
     currentFocus,
     getSessionStatus,
     globalNotifyEnabled,
+    globalMuteSoundEnabled,
     onToggleProject,
     onToggleProjectNotify,
     onToggleSessionNotify,
+    onToggleProjectMuteSound,
+    onToggleSessionMuteSound,
     onProjectFocus,
     onSessionFocus,
     onSessionSelect,
@@ -65,6 +71,24 @@
             {/if}
           </svg>
         </button>
+        {#if project.notify_on_idle}
+          <button
+            class="btn-notify-toggle"
+            class:muted={project.mute_sound}
+            onclick={(e: MouseEvent) => { e.stopPropagation(); onToggleProjectMuteSound(project.id); }}
+            title={project.mute_sound ? "Project sound OFF" : "Project sound ON"}
+          >
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 5h2l3-3v12l-3-3H3V5z"/>
+              {#if project.mute_sound}
+                <line x1="11" y1="5" x2="15" y2="9"/>
+                <line x1="15" y1="5" x2="11" y2="9"/>
+              {:else}
+                <path d="M11 5c1 1 1.5 2 1.5 3s-.5 2-1.5 3"/>
+              {/if}
+            </svg>
+          </button>
+        {/if}
       {/if}
       <span class="session-count">{visibleSessions.length}</span>
     </div>
@@ -113,6 +137,24 @@
                   {/if}
                 </svg>
               </button>
+              {#if session.notify_on_idle}
+                <button
+                  class="btn-notify-toggle"
+                  class:muted={session.mute_sound}
+                  onclick={(e: MouseEvent) => { e.stopPropagation(); onToggleSessionMuteSound(session.id, project.id); }}
+                  title={session.mute_sound ? "Session sound OFF" : "Session sound ON"}
+                >
+                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 5h2l3-3v12l-3-3H3V5z"/>
+                    {#if session.mute_sound}
+                      <line x1="11" y1="5" x2="15" y2="9"/>
+                      <line x1="15" y1="5" x2="11" y2="9"/>
+                    {:else}
+                      <path d="M11 5c1 1 1.5 2 1.5 3s-.5 2-1.5 3"/>
+                    {/if}
+                  </svg>
+                </button>
+              {/if}
             {/if}
             {#if project.staged_sessions?.some((s) => s.session_id === session.id)}
               <span class="staged-badge">staged</span>

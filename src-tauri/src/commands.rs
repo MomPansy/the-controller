@@ -327,7 +327,7 @@ fn scaffold_project_blocking(name: String, repo_path: PathBuf) -> Result<Project
         auto_worker: crate::models::AutoWorkerConfig::default(),
         prompts: vec![],
         sessions: vec![],
-        staged_sessions: vec![], notify_on_idle: true,
+        staged_sessions: vec![], notify_on_idle: true, mute_sound: false,
     })
 }
 
@@ -443,7 +443,7 @@ pub fn create_project(
         auto_worker: crate::models::AutoWorkerConfig::default(),
         prompts: vec![],
         sessions: vec![],
-        staged_sessions: vec![], notify_on_idle: true,
+        staged_sessions: vec![], notify_on_idle: true, mute_sound: false,
     };
 
     storage.save_project(&project).map_err(|e| e.to_string())?;
@@ -505,7 +505,7 @@ pub fn load_project(
         auto_worker: crate::models::AutoWorkerConfig::default(),
         prompts: vec![],
         sessions: vec![],
-        staged_sessions: vec![], notify_on_idle: true,
+        staged_sessions: vec![], notify_on_idle: true, mute_sound: false,
     };
 
     storage.save_project(&project).map_err(|e| e.to_string())?;
@@ -661,7 +661,7 @@ pub fn create_session(
         github_issue,
         initial_prompt: initial_prompt.clone(),
         done_commits: vec![],
-        auto_worker_session: false, notify_on_idle: true,
+        auto_worker_session: false, notify_on_idle: true, mute_sound: false,
     };
 
     update_project_with_rollback(
@@ -1133,6 +1133,33 @@ pub fn set_notify_on_idle(
         session.notify_on_idle = enabled;
     } else {
         project.notify_on_idle = enabled;
+    }
+
+    storage.save_project(&project).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_mute_sound(
+    state: State<'_, AppState>,
+    project_id: String,
+    session_id: Option<String>,
+    muted: bool,
+) -> Result<(), String> {
+    let project_uuid = Uuid::parse_str(&project_id).map_err(|e| e.to_string())?;
+    let storage = state.storage.lock().map_err(|e| e.to_string())?;
+    let mut project = storage.load_project(project_uuid).map_err(|e| e.to_string())?;
+
+    if let Some(sid) = session_id {
+        let session_uuid = Uuid::parse_str(&sid).map_err(|e| e.to_string())?;
+        let session = project
+            .sessions
+            .iter_mut()
+            .find(|s| s.id == session_uuid)
+            .ok_or_else(|| "Session not found".to_string())?;
+        session.mute_sound = muted;
+    } else {
+        project.mute_sound = muted;
     }
 
     storage.save_project(&project).map_err(|e| e.to_string())?;
@@ -2490,7 +2517,7 @@ mod tests {
                 github_issue: None,
                 initial_prompt: None,
                 done_commits: vec![],
-                auto_worker_session: false, notify_on_idle: true,
+                auto_worker_session: false, notify_on_idle: true, mute_sound: false,
             },
             SessionConfig {
                 id: Uuid::new_v4(),
@@ -2502,7 +2529,7 @@ mod tests {
                 github_issue: None,
                 initial_prompt: None,
                 done_commits: vec![],
-                auto_worker_session: false, notify_on_idle: true,
+                auto_worker_session: false, notify_on_idle: true, mute_sound: false,
             },
         ];
         let label = next_session_label(&sessions);
@@ -2527,7 +2554,7 @@ mod tests {
                 github_issue: None,
                 initial_prompt: None,
                 done_commits: vec![],
-                auto_worker_session: false, notify_on_idle: true,
+                auto_worker_session: false, notify_on_idle: true, mute_sound: false,
             },
             SessionConfig {
                 id: Uuid::new_v4(),
@@ -2539,7 +2566,7 @@ mod tests {
                 github_issue: None,
                 initial_prompt: None,
                 done_commits: vec![],
-                auto_worker_session: false, notify_on_idle: true,
+                auto_worker_session: false, notify_on_idle: true, mute_sound: false,
             },
             SessionConfig {
                 id: Uuid::new_v4(),
@@ -2551,7 +2578,7 @@ mod tests {
                 github_issue: None,
                 initial_prompt: None,
                 done_commits: vec![],
-                auto_worker_session: false, notify_on_idle: true,
+                auto_worker_session: false, notify_on_idle: true, mute_sound: false,
             },
         ];
         // Max is session-3, so next is session-4
@@ -2576,7 +2603,7 @@ mod tests {
             github_issue: None,
             initial_prompt: None,
             done_commits: vec![],
-            auto_worker_session: false, notify_on_idle: true,
+            auto_worker_session: false, notify_on_idle: true, mute_sound: false,
         }];
         let label = next_session_label(&sessions);
         assert!(
@@ -2979,7 +3006,7 @@ mod tests {
                     github_issue: None,
                     initial_prompt: None,
                     done_commits: vec![],
-                    auto_worker_session: false, notify_on_idle: true,
+                    auto_worker_session: false, notify_on_idle: true, mute_sound: false,
                 });
                 Ok(())
             },
@@ -3035,7 +3062,7 @@ mod tests {
                     github_issue: None,
                     initial_prompt: None,
                     done_commits: vec![],
-                    auto_worker_session: false, notify_on_idle: true,
+                    auto_worker_session: false, notify_on_idle: true, mute_sound: false,
                 });
                 Ok(())
             },
@@ -3177,7 +3204,7 @@ mod tests {
                     auto_worker: crate::models::AutoWorkerConfig::default(),
                     prompts: vec![],
                     sessions: vec![],
-                    staged_sessions: vec![], notify_on_idle: true,
+                    staged_sessions: vec![], notify_on_idle: true, mute_sound: false,
                 })
                 .expect("save existing project");
         }
@@ -3258,7 +3285,7 @@ mod tests {
                     auto_worker: crate::models::AutoWorkerConfig::default(),
                     prompts: vec![],
                     sessions: vec![],
-                    staged_sessions: vec![], notify_on_idle: true,
+                    staged_sessions: vec![], notify_on_idle: true, mute_sound: false,
                 })
                 .expect("save archived-flagged project");
         }
@@ -3471,12 +3498,12 @@ mod tests {
                         )),
                         initial_prompt: None,
                         done_commits: vec![],
-                        auto_worker_session: true, notify_on_idle: true,
+                        auto_worker_session: true, notify_on_idle: true, mute_sound: false,
                     }],
                     maintainer: crate::models::MaintainerConfig::default(),
                     auto_worker: crate::models::AutoWorkerConfig { enabled: true },
                     prompts: vec![],
-                    staged_sessions: vec![], notify_on_idle: true,
+                    staged_sessions: vec![], notify_on_idle: true, mute_sound: false,
                 })
                 .expect("save project");
         }
