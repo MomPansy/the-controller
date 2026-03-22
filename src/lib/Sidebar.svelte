@@ -910,6 +910,7 @@
     <DeleteProjectModal
       projectId={deleteTarget.id}
       projectName={deleteTarget.name}
+      repoPath={deleteTarget.repo_path}
       onDeleted={async () => {
         const nextFocus = focusAfterProjectDelete(projectList, deleteTarget!.id, expandedProjectSet);
         activeSessionId.update(current => {

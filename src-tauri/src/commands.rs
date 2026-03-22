@@ -558,8 +558,15 @@ pub fn delete_project(
     // Delete project metadata from ~/.the-controller/projects/{id}/
     storage.delete_project_dir(id).map_err(|e| e.to_string())?;
 
-    // Optionally delete the repo directory
+    // Optionally delete the repo directory (but never delete the-controller itself)
     if delete_repo && Path::new(&project.repo_path).exists() {
+        let repo_name = Path::new(&project.repo_path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("");
+        if repo_name == "the-controller" {
+            return Err("Cannot delete the-controller project repo".to_string());
+        }
         std::fs::remove_dir_all(&project.repo_path)
             .map_err(|e| format!("failed to delete repo: {}", e))?;
     }
