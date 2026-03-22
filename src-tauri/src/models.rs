@@ -18,6 +18,8 @@ pub struct Project {
     /// Sessions staged as separate Controller instances.
     #[serde(default, alias = "staged_session", deserialize_with = "deserialize_staged_sessions")]
     pub staged_sessions: Vec<StagedSession>,
+    #[serde(default = "default_true")]
+    pub notify_on_idle: bool,
 }
 
 /// Tracks staging state: which session is running as a separate
@@ -71,6 +73,8 @@ pub struct SessionConfig {
     pub done_commits: Vec<CommitInfo>,
     #[serde(default)]
     pub auto_worker_session: bool,
+    #[serde(default = "default_true")]
+    pub notify_on_idle: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -81,6 +85,10 @@ pub struct CommitInfo {
 
 fn default_kind() -> String {
     "claude".to_string()
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -267,9 +275,9 @@ mod tests {
                 github_issue: None,
                 initial_prompt: None,
                 done_commits: vec![],
-                auto_worker_session: false,
+                auto_worker_session: false, notify_on_idle: true,
             }],
-            staged_sessions: vec![],
+            staged_sessions: vec![], notify_on_idle: true,
         };
 
         let json = serde_json::to_string(&project).expect("serialize");
@@ -325,9 +333,9 @@ mod tests {
                 github_issue: None,
                 initial_prompt: None,
                 done_commits: vec![],
-                auto_worker_session: false,
+                auto_worker_session: false, notify_on_idle: true,
             }],
-            staged_sessions: vec![],
+            staged_sessions: vec![], notify_on_idle: true,
         };
 
         let json = serde_json::to_string(&project).expect("serialize");
@@ -365,7 +373,7 @@ mod tests {
             }),
             initial_prompt: None,
             done_commits: vec![],
-            auto_worker_session: false,
+            auto_worker_session: false, notify_on_idle: true,
         };
         let json = serde_json::to_string(&session).expect("serialize");
         let deserialized: SessionConfig = serde_json::from_str(&json).expect("deserialize");
@@ -402,7 +410,7 @@ mod tests {
             github_issue: None,
             initial_prompt: Some("fix the bug".to_string()),
             done_commits: vec![],
-            auto_worker_session: false,
+            auto_worker_session: false, notify_on_idle: true,
         };
         let json = serde_json::to_string(&session).expect("serialize");
         let deserialized: SessionConfig = serde_json::from_str(&json).expect("deserialize");
@@ -492,7 +500,7 @@ mod tests {
             auto_worker: AutoWorkerConfig::default(),
             prompts: vec![],
             sessions: vec![],
-            staged_sessions: vec![],
+            staged_sessions: vec![], notify_on_idle: true,
         };
         let json = serde_json::to_string(&project).expect("serialize");
         let deserialized: Project = serde_json::from_str(&json).expect("deserialize");
@@ -596,7 +604,7 @@ mod tests {
             auto_worker: AutoWorkerConfig { enabled: true },
             prompts: vec![],
             sessions: vec![],
-            staged_sessions: vec![],
+            staged_sessions: vec![], notify_on_idle: true,
         };
         let json = serde_json::to_string(&project).expect("serialize");
         let deserialized: Project = serde_json::from_str(&json).expect("deserialize");
@@ -694,6 +702,7 @@ mod tests {
                 pid: 99999,
                 port: 2420,
             }],
+            notify_on_idle: true,
         };
         let json = serde_json::to_string(&project).expect("serialize");
         let deserialized: Project = serde_json::from_str(&json).expect("deserialize");
@@ -793,6 +802,7 @@ mod tests {
                 StagedSession { session_id: Uuid::new_v4(), pid: 1001, port: 2420 },
                 StagedSession { session_id: Uuid::new_v4(), pid: 1002, port: 2421 },
             ],
+            notify_on_idle: true,
         };
         let json = serde_json::to_string(&project).expect("serialize");
         let deserialized: Project = serde_json::from_str(&json).expect("deserialize");
@@ -835,5 +845,66 @@ mod tests {
         }"#;
         let project: Project = serde_json::from_str(json).expect("deserialize null staged_session");
         assert!(project.staged_sessions.is_empty());
+    }
+
+    #[test]
+    fn test_project_notify_on_idle_defaults_to_true() {
+        let json = r#"{
+            "id": "550e8400-e29b-41d4-a716-446655440000",
+            "name": "test-project",
+            "repo_path": "/tmp/test-repo",
+            "created_at": "2026-02-28T00:00:00Z",
+            "archived": false,
+            "sessions": []
+        }"#;
+        let project: Project = serde_json::from_str(json).expect("deserialize");
+        assert!(project.notify_on_idle);
+    }
+
+    #[test]
+    fn test_session_notify_on_idle_defaults_to_true() {
+        let json = r#"{"id":"550e8400-e29b-41d4-a716-446655440000","label":"session-1","worktree_path":null,"worktree_branch":null,"archived":false}"#;
+        let session: SessionConfig = serde_json::from_str(json).expect("deserialize");
+        assert!(session.notify_on_idle);
+    }
+
+    #[test]
+    fn test_project_notify_on_idle_false_roundtrip() {
+        let project = Project {
+            id: Uuid::new_v4(),
+            name: "test".to_string(),
+            repo_path: "/tmp".to_string(),
+            created_at: "2026-03-20T00:00:00Z".to_string(),
+            archived: false,
+            maintainer: MaintainerConfig::default(),
+            auto_worker: AutoWorkerConfig::default(),
+            prompts: vec![],
+            sessions: vec![],
+            staged_sessions: vec![],
+            notify_on_idle: false,
+        };
+        let json = serde_json::to_string(&project).expect("serialize");
+        let deserialized: Project = serde_json::from_str(&json).expect("deserialize");
+        assert!(!deserialized.notify_on_idle);
+    }
+
+    #[test]
+    fn test_session_notify_on_idle_false_roundtrip() {
+        let session = SessionConfig {
+            id: Uuid::new_v4(),
+            label: "session-1".to_string(),
+            worktree_path: None,
+            worktree_branch: None,
+            archived: false,
+            kind: "claude".to_string(),
+            github_issue: None,
+            initial_prompt: None,
+            done_commits: vec![],
+            auto_worker_session: false,
+            notify_on_idle: false,
+        };
+        let json = serde_json::to_string(&session).expect("serialize");
+        let deserialized: SessionConfig = serde_json::from_str(&json).expect("deserialize");
+        assert!(!deserialized.notify_on_idle);
     }
 }

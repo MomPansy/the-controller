@@ -46,6 +46,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let emitter = emitter::TauriEmitter::new(app.handle().clone());
             let app_state = match state::AppState::new(emitter) {
@@ -145,6 +146,7 @@ pub fn run() {
             commands::stop_voice_pipeline,
             commands::toggle_voice_pause,
             commands::log_frontend_error,
+            commands::set_notify_on_idle,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

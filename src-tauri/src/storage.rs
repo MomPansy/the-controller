@@ -364,9 +364,9 @@ mod tests {
                 github_issue: None,
                 initial_prompt: None,
                 done_commits: vec![],
-                auto_worker_session: false,
+                auto_worker_session: false, notify_on_idle: true,
             }],
-            staged_sessions: vec![],
+            staged_sessions: vec![], notify_on_idle: true,
         }
     }
 
