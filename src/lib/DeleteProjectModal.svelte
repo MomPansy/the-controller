@@ -6,11 +6,14 @@
   interface Props {
     projectId: string;
     projectName: string;
+    repoPath: string;
     onDeleted: () => void;
     onClose: () => void;
   }
 
-  let { projectId, projectName, onDeleted, onClose }: Props = $props();
+  let { projectId, projectName, repoPath, onDeleted, onClose }: Props = $props();
+
+  const isSelfProject = repoPath.replace(/\/+$/, "").endsWith("/the-controller");
 
   let loading = $state(false);
   let modalEl: HTMLDivElement | undefined = $state();
@@ -40,7 +43,7 @@
     } else if (e.key === "d") {
       e.preventDefault();
       e.stopPropagation();
-      deleteProject(true);
+      if (!isSelfProject) deleteProject(true);
     }
   }
 
@@ -75,7 +78,8 @@
       <button
         class="btn-delete"
         onclick={() => deleteProject(true)}
-        disabled={loading}
+        disabled={loading || isSelfProject}
+        title={isSelfProject ? "Cannot delete the-controller project" : ""}
       >Delete Everything <kbd>d</kbd></button>
       <button
         class="btn-cancel"
