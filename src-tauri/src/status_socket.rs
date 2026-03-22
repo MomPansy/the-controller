@@ -375,8 +375,8 @@ pub fn hook_settings_json(session_id: Uuid) -> String {
                     "type": "command",
                     "command": working_cmd
                 }]
-            }],
-            "Stop": [{
+            }, {
+                "matcher": "AskUserQuestion",
                 "hooks": [{
                     "type": "command",
                     "command": idle_cmd
@@ -384,6 +384,18 @@ pub fn hook_settings_json(session_id: Uuid) -> String {
             }],
             "Notification": [{
                 "matcher": "idle_prompt",
+                "hooks": [{
+                    "type": "command",
+                    "command": idle_cmd
+                }]
+            }, {
+                "matcher": "permission_prompt",
+                "hooks": [{
+                    "type": "command",
+                    "command": idle_cmd
+                }]
+            }, {
+                "matcher": "elicitation_dialog",
                 "hooks": [{
                     "type": "command",
                     "command": idle_cmd
@@ -509,7 +521,6 @@ mod tests {
         assert!(hooks.get("UserPromptSubmit").is_some());
         assert!(hooks.get("PreToolUse").is_some());
         assert!(hooks.get("PostToolUse").is_some());
-        assert!(hooks.get("Stop").is_some());
         assert!(hooks.get("Notification").is_some());
 
         // Verify new hooks format: each event entry must have a nested "hooks" array
@@ -517,7 +528,6 @@ mod tests {
             "UserPromptSubmit",
             "PreToolUse",
             "PostToolUse",
-            "Stop",
             "Notification",
         ] {
             let entries = hooks.get(*event_name).unwrap().as_array().unwrap();
@@ -531,6 +541,70 @@ mod tests {
                 assert!(!inner.is_empty(), "{} has empty hooks array", event_name);
             }
         }
+    }
+
+    #[test]
+    fn test_hook_notification_matchers_include_permission_and_elicitation() {
+        let id = uuid::Uuid::new_v4();
+        let json = hook_settings_json(id);
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let hooks = parsed.get("hooks").unwrap();
+        let notification_entries = hooks.get("Notification").unwrap().as_array().unwrap();
+
+        let matchers: Vec<&str> = notification_entries
+            .iter()
+            .filter_map(|entry| entry.get("matcher").and_then(|m| m.as_str()))
+            .collect();
+
+        assert!(
+            matchers.contains(&"permission_prompt"),
+            "Notification hooks must include permission_prompt matcher, got: {:?}",
+            matchers
+        );
+        assert!(
+            matchers.contains(&"elicitation_dialog"),
+            "Notification hooks must include elicitation_dialog matcher, got: {:?}",
+            matchers
+        );
+        assert!(
+            matchers.contains(&"idle_prompt"),
+            "Notification hooks must still include idle_prompt matcher, got: {:?}",
+            matchers
+        );
+    }
+
+    #[test]
+    fn test_hook_post_tool_use_includes_ask_user_question_idle_matcher() {
+        let id = uuid::Uuid::new_v4();
+        let json = hook_settings_json(id);
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let hooks = parsed.get("hooks").unwrap();
+        let post_tool_entries = hooks.get("PostToolUse").unwrap().as_array().unwrap();
+
+        let has_ask_user_matcher = post_tool_entries.iter().any(|entry| {
+            entry
+                .get("matcher")
+                .and_then(|m| m.as_str())
+                .is_some_and(|m| m == "AskUserQuestion")
+        });
+
+        assert!(
+            has_ask_user_matcher,
+            "PostToolUse must include an AskUserQuestion matcher for idle detection"
+        );
+    }
+
+    #[test]
+    fn test_hook_does_not_include_stop_event() {
+        let id = uuid::Uuid::new_v4();
+        let json = hook_settings_json(id);
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let hooks = parsed.get("hooks").unwrap();
+
+        assert!(
+            hooks.get("Stop").is_none(),
+            "Stop hook must not be present — it fires for subagents causing false positives"
+        );
     }
 
     #[test]
