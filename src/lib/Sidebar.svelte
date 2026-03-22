@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { fromStore } from "svelte/store";
+  import { fromStore, get } from "svelte/store";
   import { command, listen } from "$lib/backend";
   import { refreshProjectsFromBackend } from "./project-listing";
-  import { projects, activeSessionId, sessionStatuses, maintainerStatuses, maintainerErrors, autoWorkerStatuses, hotkeyAction, showKeyHints, focusTarget, expandedProjects, focusTerminalSoon, workspaceMode, activeNote, noteEntries, noteFolders, selectedSessionProvider, type CorruptProjectEntry, type Project, type ProjectInventory, type FocusTarget, type SessionStatus, type MaintainerStatus, type AutoWorkerStatus, type NoteEntry } from "./stores";
+  import { projects, activeSessionId, sessionStatuses, maintainerStatuses, maintainerErrors, autoWorkerStatuses, hotkeyAction, showKeyHints, focusTarget, expandedProjects, focusTerminalSoon, workspaceMode, activeNote, noteEntries, noteFolders, selectedSessionProvider, globalNotifyOnIdle, shouldNotify, type CorruptProjectEntry, type Project, type ProjectInventory, type FocusTarget, type SessionStatus, type MaintainerStatus, type AutoWorkerStatus, type NoteEntry } from "./stores";
   import { showToast } from "./toast";
   import { focusAfterSessionDelete, focusAfterProjectDelete } from "./focus-helpers";
   import { sendFinishBranchPrompt } from "./finish-branch";
@@ -19,6 +19,7 @@
 
   let sidebarEl: HTMLElement | undefined = $state();
   const showKeyHintsState = fromStore(showKeyHints);
+  const globalNotifyState = fromStore(globalNotifyOnIdle);
   let showNewProjectModal = $state(false);
   const expandedProjectsState = fromStore(expandedProjects);
   let expandedProjectSet: Set<string> = $derived(expandedProjectsState.current);
@@ -286,6 +287,7 @@
             idleTimers.set(session.id, setTimeout(() => {
               idleTimers.delete(session.id);
               markSession(session.id, "idle");
+              maybeNotifyIdle(session.id);
             }, IDLE_DEBOUNCE_MS));
           }
         }));
@@ -377,6 +379,29 @@
       next.add(projectId);
     }
     expandedProjects.set(next);
+  }
+
+  async function toggleProjectNotify(projectId: string) {
+    const project = projectList.find(p => p.id === projectId);
+    if (!project) return;
+    await command("set_notify_on_idle", {
+      projectId,
+      sessionId: null,
+      enabled: !project.notify_on_idle,
+    });
+    await loadProjects();
+  }
+
+  async function toggleSessionNotify(sessionId: string, projectId: string) {
+    const project = projectList.find(p => p.id === projectId);
+    const session = project?.sessions.find(s => s.id === sessionId);
+    if (!session) return;
+    await command("set_notify_on_idle", {
+      projectId,
+      sessionId,
+      enabled: !session.notify_on_idle,
+    });
+    await loadProjects();
   }
 
   async function createSession(projectId: string, kind?: string) {
@@ -631,6 +656,56 @@
     }
   }
 
+  async function sendNotification(title: string, body: string) {
+    const isTauri = !!(window as any).__TAURI_INTERNALS__;
+    if (isTauri) {
+      try {
+        const { isPermissionGranted, requestPermission, sendNotification: tauriNotify } = await import("@tauri-apps/plugin-notification");
+        let granted = await isPermissionGranted();
+        if (!granted) {
+          const permission = await requestPermission();
+          granted = permission === "granted";
+        }
+        if (granted) {
+          tauriNotify({ title, body, sound: "default" });
+        } else {
+          console.warn("[notifications] Permission not granted, skipping notification");
+        }
+      } catch (e) {
+        console.warn("[notifications] Plugin error:", e);
+      }
+    } else {
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+        new Notification(title, { body });
+      }
+    }
+  }
+
+  function maybeNotifyIdle(sessionId: string) {
+    const project = projectList.find(p => p.sessions.some(s => s.id === sessionId));
+    if (!project) return;
+    const session = project.sessions.find(s => s.id === sessionId);
+    if (!session) return;
+    if (!shouldNotify(get(globalNotifyOnIdle), project.notify_on_idle, session.notify_on_idle)) return;
+    sendNotification("Session idle", `${project.name} / ${session.label} is waiting for input`);
+  }
+
+  // Request notification permission on startup
+  $effect(() => {
+    const isTauri = !!(window as any).__TAURI_INTERNALS__;
+    if (isTauri) {
+      import("@tauri-apps/plugin-notification").then(async ({ isPermissionGranted, requestPermission }) => {
+        const granted = await isPermissionGranted();
+        if (!granted) {
+          const result = await requestPermission();
+          console.log("[notifications] Tauri permission request result:", result);
+        }
+      }).catch(() => {});
+    } else if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  });
+
 
 </script>
 
@@ -677,7 +752,10 @@
         {activeSession}
         {currentFocus}
         {getSessionStatus}
+        globalNotifyEnabled={globalNotifyState.current}
         onToggleProject={toggleProject}
+        onToggleProjectNotify={toggleProjectNotify}
+        onToggleSessionNotify={toggleSessionNotify}
         onProjectFocus={(projectId) => {
           focusTarget.set({ type: "project", projectId });
         }}
@@ -696,6 +774,20 @@
     <div class="footer-left">
       <div class="provider-indicator">Provider: {currentSessionProviderLabel}</div>
     </div>
+    <button
+      class="btn-notify"
+      class:active={globalNotifyState.current}
+      onclick={() => globalNotifyOnIdle.update(v => !v)}
+      title={globalNotifyState.current ? "Notifications ON (click to mute all)" : "Notifications OFF (click to unmute all)"}
+    >
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M8 1.5C5.5 1.5 4 3.5 4 6c0 2-1 3-1.5 4h11C13 9 12 8 12 6c0-2.5-1.5-4.5-4-4.5z"/>
+        <path d="M6.5 13a1.5 1.5 0 003 0"/>
+        {#if !globalNotifyState.current}
+          <line x1="1" y1="1" x2="15" y2="15"/>
+        {/if}
+      </svg>
+    </button>
     <button
       class="btn-help"
       class:active={showKeyHintsState.current}
@@ -932,6 +1024,29 @@
   }
 
   .btn-help.active {
+    color: var(--text-emphasis);
+  }
+
+  .btn-notify {
+    background: none;
+    border: none;
+    border-left: 1px solid var(--border-default);
+    color: var(--text-primary);
+    cursor: pointer;
+    padding: 8px 0;
+    width: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: none;
+  }
+
+  .btn-notify:hover {
+    color: var(--text-primary);
+  }
+
+  .btn-notify.active {
     color: var(--text-emphasis);
   }
 </style>

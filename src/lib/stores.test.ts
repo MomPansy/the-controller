@@ -13,6 +13,7 @@ import {
   sidebarVisible,
   workspaceMode,
   workspaceModePickerVisible,
+  shouldNotify,
 } from './stores';
 
 describe('stores', () => {
@@ -102,6 +103,28 @@ describe('stores', () => {
 
     it('picker starts hidden', () => {
       expect(get(workspaceModePickerVisible)).toBe(false);
+    });
+  });
+
+  describe('shouldNotify', () => {
+    it('returns true when all toggles enabled', () => {
+      expect(shouldNotify(true, true, true)).toBe(true);
+    });
+
+    it('returns false when global toggle is disabled', () => {
+      expect(shouldNotify(false, true, true)).toBe(false);
+    });
+
+    it('returns false when project toggle is disabled', () => {
+      expect(shouldNotify(true, false, true)).toBe(false);
+    });
+
+    it('returns false when session toggle is disabled', () => {
+      expect(shouldNotify(true, true, false)).toBe(false);
+    });
+
+    it('returns false when all toggles are disabled', () => {
+      expect(shouldNotify(false, false, false)).toBe(false);
     });
   });
 });

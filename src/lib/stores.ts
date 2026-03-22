@@ -32,6 +32,7 @@ export interface SessionConfig {
   github_issue: GithubIssue | null;
   initial_prompt: string | null;
   auto_worker_session: boolean;
+  notify_on_idle: boolean;
 }
 
 export interface MaintainerConfig {
@@ -111,6 +112,7 @@ export interface Project {
   auto_worker: AutoWorkerConfig;
   prompts: SavedPrompt[];
   staged_sessions: StagedSession[];
+  notify_on_idle: boolean;
 }
 
 export interface CorruptProjectEntry {
@@ -286,6 +288,22 @@ export const showKeyHints = writable<boolean>(false);
 export const sidebarVisible = writable<boolean>(true);
 
 export const expandedProjects = writable<Set<string>>(new Set());
+
+function createPersistedBoolean(key: string, defaultValue: boolean) {
+  const stored = typeof localStorage !== "undefined" ? localStorage.getItem(key) : null;
+  const initial = stored !== null ? stored === "true" : defaultValue;
+  const store = writable<boolean>(initial);
+  store.subscribe(v => {
+    if (typeof localStorage !== "undefined") localStorage.setItem(key, String(v));
+  });
+  return store;
+}
+
+export const globalNotifyOnIdle = createPersistedBoolean("notify_on_idle_global", true);
+
+export function shouldNotify(globalEnabled: boolean, projectEnabled: boolean, sessionEnabled: boolean): boolean {
+  return globalEnabled && projectEnabled && sessionEnabled;
+}
 
 export function dispatchHotkeyAction(action: NonNullable<HotkeyAction>) {
   hotkeyAction.set(action);

@@ -7,7 +7,10 @@
     activeSession: string | null;
     currentFocus: FocusTarget;
     getSessionStatus: (sessionId: string) => SessionStatus;
+    globalNotifyEnabled: boolean;
     onToggleProject: (projectId: string) => void;
+    onToggleProjectNotify: (projectId: string) => void;
+    onToggleSessionNotify: (sessionId: string, projectId: string) => void;
     onProjectFocus: (projectId: string) => void;
     onSessionFocus: (sessionId: string, projectId: string) => void;
     onSessionSelect: (sessionId: string, projectId: string) => void;
@@ -19,7 +22,10 @@
     activeSession,
     currentFocus,
     getSessionStatus,
+    globalNotifyEnabled,
     onToggleProject,
+    onToggleProjectNotify,
+    onToggleSessionNotify,
     onProjectFocus,
     onSessionFocus,
     onSessionSelect,
@@ -44,6 +50,22 @@
         {expandedProjectSet.has(project.id) ? "\u25BC" : "\u25B6"}
       </button>
       <span class="project-name">{project.name}</span>
+      {#if globalNotifyEnabled}
+        <button
+          class="btn-notify-toggle"
+          class:muted={!project.notify_on_idle}
+          onclick={(e: MouseEvent) => { e.stopPropagation(); onToggleProjectNotify(project.id); }}
+          title={project.notify_on_idle ? "Project notifications ON" : "Project notifications OFF"}
+        >
+          <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 1.5C5.5 1.5 4 3.5 4 6c0 2-1 3-1.5 4h11C13 9 12 8 12 6c0-2.5-1.5-4.5-4-4.5z"/>
+            <path d="M6.5 13a1.5 1.5 0 003 0"/>
+            {#if !project.notify_on_idle}
+              <line x1="1" y1="1" x2="15" y2="15"/>
+            {/if}
+          </svg>
+        </button>
+      {/if}
       <span class="session-count">{visibleSessions.length}</span>
     </div>
 
@@ -76,6 +98,22 @@
               {getSessionStatus(session.id) === "exited" ? "\u25CB" : "\u25CF"}
             </span>
             <span class="session-label">{session.label}</span>
+            {#if globalNotifyEnabled && project.notify_on_idle}
+              <button
+                class="btn-notify-toggle"
+                class:muted={!session.notify_on_idle}
+                onclick={(e: MouseEvent) => { e.stopPropagation(); onToggleSessionNotify(session.id, project.id); }}
+                title={session.notify_on_idle ? "Session notifications ON" : "Session notifications OFF"}
+              >
+                <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M8 1.5C5.5 1.5 4 3.5 4 6c0 2-1 3-1.5 4h11C13 9 12 8 12 6c0-2.5-1.5-4.5-4-4.5z"/>
+                  <path d="M6.5 13a1.5 1.5 0 003 0"/>
+                  {#if !session.notify_on_idle}
+                    <line x1="1" y1="1" x2="15" y2="15"/>
+                  {/if}
+                </svg>
+              </button>
+            {/if}
             {#if project.staged_sessions?.some((s) => s.session_id === session.id)}
               <span class="staged-badge">staged</span>
             {/if}
@@ -212,5 +250,35 @@
     border-radius: 3px;
     white-space: nowrap;
     flex-shrink: 0;
+  }
+
+  .btn-notify-toggle {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 2px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    opacity: 0.4;
+    transition: opacity 0.15s;
+    box-shadow: none;
+  }
+
+  .project-header:hover .btn-notify-toggle,
+  .session-item:hover .btn-notify-toggle,
+  .btn-notify-toggle:focus-visible {
+    opacity: 1;
+  }
+
+  .btn-notify-toggle.muted {
+    opacity: 0.5;
+  }
+
+  .project-header:hover .btn-notify-toggle.muted,
+  .session-item:hover .btn-notify-toggle.muted {
+    opacity: 1;
+    color: var(--text-secondary);
   }
 </style>

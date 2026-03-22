@@ -152,6 +152,7 @@ impl PtyManager {
 
         let output_event = format!("pty-output:{}", session_id);
         let status_event = format!("session-status-changed:{}", session_id);
+        let hook_event = format!("session-status-hook:{}", session_id);
 
         thread::spawn(move || {
             let mut buf = [0u8; 4096];
@@ -167,6 +168,11 @@ impl PtyManager {
                     Ok(n) => {
                         let encoded = base64::engine::general_purpose::STANDARD.encode(&buf[..n]);
                         let _ = emitter.emit(&output_event, &encoded);
+                        if let Ok(text) = std::str::from_utf8(&buf[..n]) {
+                            if text.contains("Do you want to proceed?") {
+                                let _ = emitter.emit(&hook_event, "idle");
+                            }
+                        }
                     }
                     Err(_) => {
                         if let Ok(mut a) = alive_clone.lock() {
@@ -239,6 +245,7 @@ impl PtyManager {
 
         let output_event = format!("pty-output:{}", session_id);
         let status_event = format!("session-status-changed:{}", session_id);
+        let hook_event = format!("session-status-hook:{}", session_id);
 
         thread::spawn(move || {
             let mut buf = [0u8; 4096];
@@ -254,6 +261,11 @@ impl PtyManager {
                     Ok(n) => {
                         let encoded = base64::engine::general_purpose::STANDARD.encode(&buf[..n]);
                         let _ = emitter.emit(&output_event, &encoded);
+                        if let Ok(text) = std::str::from_utf8(&buf[..n]) {
+                            if text.contains("Do you want to proceed?") {
+                                let _ = emitter.emit(&hook_event, "idle");
+                            }
+                        }
                     }
                     Err(_) => {
                         if let Ok(mut a) = alive_clone.lock() {
@@ -325,6 +337,7 @@ impl PtyManager {
 
         let output_event = format!("pty-output:{}", session_id);
         let status_event = format!("session-status-changed:{}", session_id);
+        let hook_event = format!("session-status-hook:{}", session_id);
 
         thread::spawn(move || {
             let mut buf = [0u8; 4096];
@@ -340,6 +353,11 @@ impl PtyManager {
                     Ok(n) => {
                         let encoded = base64::engine::general_purpose::STANDARD.encode(&buf[..n]);
                         let _ = emitter.emit(&output_event, &encoded);
+                        if let Ok(text) = std::str::from_utf8(&buf[..n]) {
+                            if text.contains("Do you want to proceed?") {
+                                let _ = emitter.emit(&hook_event, "idle");
+                            }
+                        }
                     }
                     Err(_) => {
                         if let Ok(mut a) = alive_clone.lock() {
