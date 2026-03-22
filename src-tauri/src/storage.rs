@@ -257,6 +257,22 @@ impl Storage {
         fs::write(dir.join("agents.md"), content)
     }
 
+    /// Return the path to the per-session log file for a given session.
+    ///
+    /// Format: `~/.the-controller/projects/{project_id}/session-logs/{session_id}.bin`
+    /// Each record in the file is a 4-byte little-endian u32 length followed by
+    /// that many bytes of raw PTY output.
+    pub fn session_log_path(&self, project_id: Uuid, session_id: Uuid) -> PathBuf {
+        self.project_dir(project_id)
+            .join("session-logs")
+            .join(format!("{}.bin", session_id))
+    }
+
+    /// Ensure the session-logs directory exists for the given project.
+    pub fn ensure_session_log_dir(&self, project_id: Uuid) -> std::io::Result<()> {
+        fs::create_dir_all(self.project_dir(project_id).join("session-logs"))
+    }
+
     /// Return the path to a project's maintainer run logs directory.
     pub fn maintainer_run_logs_dir(&self, project_id: Uuid) -> PathBuf {
         self.project_dir(project_id).join("maintainer-reports")
@@ -647,6 +663,28 @@ mod tests {
             .latest_maintainer_run_log(project_id)
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn test_session_log_path_format() {
+        let tmp = TempDir::new().unwrap();
+        let storage = Storage::new(tmp.path().to_path_buf());
+        let project_id = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
+        let session_id = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440001").unwrap();
+        let path = storage.session_log_path(project_id, session_id);
+        assert!(path.ends_with(
+            "projects/550e8400-e29b-41d4-a716-446655440000/session-logs/550e8400-e29b-41d4-a716-446655440001.bin"
+        ));
+    }
+
+    #[test]
+    fn test_ensure_session_log_dir_creates_directory() {
+        let tmp = TempDir::new().unwrap();
+        let storage = make_storage(&tmp);
+        let project_id = Uuid::new_v4();
+        storage.ensure_session_log_dir(project_id).expect("create dir");
+        let dir = storage.project_dir(project_id).join("session-logs");
+        assert!(dir.is_dir());
     }
 
     #[test]

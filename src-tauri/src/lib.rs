@@ -77,6 +77,7 @@ pub fn run() {
             commands::send_raw_to_pty,
             commands::resize_pty,
             commands::close_session,
+            commands::get_session_history,
             commands::set_initial_prompt,
             commands::submit_secure_env_value,
             commands::cancel_secure_env_request,

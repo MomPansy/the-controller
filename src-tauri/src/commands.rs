@@ -1,5 +1,7 @@
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
+use base64::Engine;
 use tauri::{AppHandle, State};
 use uuid::Uuid;
 
@@ -8,6 +10,7 @@ use crate::config;
 use crate::models::{AutoWorkerQueueIssue, CommitInfo, GithubIssue, Project, SessionConfig};
 use crate::state::AppState;
 use crate::storage::ProjectInventory;
+use crate::tmux::TmuxManager;
 use crate::token_usage::{self, TokenDataPoint};
 use crate::worktree::WorktreeManager;
 
@@ -377,7 +380,7 @@ pub async fn connect_session(
     }
 
     // Find session config from storage
-    let (session_dir, kind) = {
+    let (session_dir, kind, log_path) = {
         let storage = state.storage.lock().map_err(|e| e.to_string())?;
         let inventory = storage.list_projects().map_err(|e| e.to_string())?;
         inventory.warn_if_corrupt("connect_session");
@@ -391,7 +394,11 @@ pub async fn connect_session(
                     .worktree_path
                     .clone()
                     .unwrap_or_else(|| p.repo_path.clone());
-                (dir, s.kind.clone())
+                let log_path = {
+                    let _ = storage.ensure_session_log_dir(p.id);
+                    storage.session_log_path(p.id, s.id)
+                };
+                (dir, s.kind.clone(), log_path)
             })
             .ok_or_else(|| format!("session not found: {}", session_id))?
     };
@@ -404,7 +411,7 @@ pub async fn connect_session(
     let emitter = state.emitter.clone();
     tokio::task::spawn_blocking(move || {
         let mut mgr = pty_manager.lock().map_err(|e| e.to_string())?;
-        mgr.spawn_session(id, &session_dir, &kind, emitter, true, None, rows, cols)
+        mgr.spawn_session(id, &session_dir, &kind, emitter, true, None, rows, cols, Some(log_path))
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
@@ -604,17 +611,20 @@ pub fn create_session(
     let session_id = Uuid::new_v4();
 
     // Load the project and generate session label
-    let (repo_path, label, base_dir, project_name) = {
+    let (repo_path, label, base_dir, project_name, session_log_path) = {
         let storage = state.storage.lock().map_err(|e| e.to_string())?;
         let project = storage
             .load_project(project_uuid)
             .map_err(|e| e.to_string())?;
         let label = next_session_label(&project.sessions);
+        let _ = storage.ensure_session_log_dir(project_uuid);
+        let log_path = storage.session_log_path(project_uuid, session_id);
         (
             project.repo_path.clone(),
             label,
             storage.base_dir(),
             project.name.clone(),
+            log_path,
         )
     };
 
@@ -686,6 +696,7 @@ pub fn create_session(
                 initial_prompt.as_deref(),
                 24,
                 80,
+                Some(session_log_path.clone()),
             )
         },
     )
@@ -1243,6 +1254,70 @@ pub fn list_project_prompts(
         .load_project(project_uuid)
         .map_err(|e| e.to_string())?;
     Ok(project.prompts)
+}
+
+/// Read a session log file and return its contents as a list of base64-encoded chunks.
+///
+/// The log format is a sequence of length-prefixed records:
+///   [4-byte LE u32 length][length bytes of raw PTY data]
+///
+/// Returns an empty list if the file does not exist or if a live tmux session
+/// exists for this session (tmux will replay scrollback on attach, so we avoid
+/// duplicating output).
+fn read_session_log(path: &Path) -> Result<Vec<String>, String> {
+    if !path.exists() {
+        return Ok(vec![]);
+    }
+    let mut f = std::fs::File::open(path).map_err(|e| e.to_string())?;
+    let mut chunks = Vec::new();
+    loop {
+        let mut len_buf = [0u8; 4];
+        match f.read_exact(&mut len_buf) {
+            Ok(()) => {
+                let len = u32::from_le_bytes(len_buf) as usize;
+                let mut data = vec![0u8; len];
+                if f.read_exact(&mut data).is_err() {
+                    // Truncated record at end of file — stop gracefully
+                    break;
+                }
+                chunks.push(base64::engine::general_purpose::STANDARD.encode(&data));
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
+            Err(e) => return Err(e.to_string()),
+        }
+    }
+    Ok(chunks)
+}
+
+/// Return the persisted PTY output for a session as base64-encoded chunks.
+///
+/// Returns an empty list when:
+/// - The log file does not exist (new session or history cleared)
+/// - A live tmux session exists for the session ID (tmux replays scrollback
+///   on attach, so loading from the file would duplicate output)
+#[tauri::command]
+pub async fn get_session_history(
+    state: State<'_, AppState>,
+    project_id: String,
+    session_id: String,
+) -> Result<Vec<String>, String> {
+    let project_uuid = Uuid::parse_str(&project_id).map_err(|e| e.to_string())?;
+    let session_uuid = Uuid::parse_str(&session_id).map_err(|e| e.to_string())?;
+
+    // If tmux has this session alive it will replay scrollback on attach —
+    // skip replaying from the log file to avoid duplicating output.
+    if TmuxManager::has_session(session_uuid) {
+        return Ok(vec![]);
+    }
+
+    let log_path = {
+        let storage = state.storage.lock().map_err(|e| e.to_string())?;
+        storage.session_log_path(project_uuid, session_uuid)
+    };
+
+    tokio::task::spawn_blocking(move || read_session_log(&log_path))
+        .await
+        .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]

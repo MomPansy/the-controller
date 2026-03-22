@@ -37,6 +37,9 @@
   // Whether connect_session has been called for this terminal.
   let connected = false;
 
+  // Whether history has already been replayed (guard against double-replay).
+  let historyLoaded = false;
+
   // Capture the first prompt typed by the user (text before first Enter).
   // Skip if session already has a prompt (e.g., from a GitHub issue).
   let promptBuffer = "";
@@ -82,6 +85,33 @@
       prompt,
     }).then(() => refreshProjectsFromBackend()).catch((err) => {
       console.error("Failed to save initial prompt:", err);
+    });
+  }
+
+  async function connectWithHistory(rows: number, cols: number) {
+    connected = true;
+    if (!historyLoaded) {
+      historyLoaded = true;
+      const match = get(projects)
+        .flatMap((p) => p.sessions.map((s) => ({ session: s, projectId: p.id })))
+        .find((x) => x.session.id === sessionId);
+      if (match && term) {
+        try {
+          const history = await command<string[]>("get_session_history", {
+            projectId: match.projectId,
+            sessionId,
+          });
+          for (const chunk of history) {
+            const bytes = Uint8Array.from(atob(chunk), (c) => c.charCodeAt(0));
+            term.write(bytes);
+          }
+        } catch (err) {
+          console.error("Failed to load session history:", err);
+        }
+      }
+    }
+    command("connect_session", { sessionId, rows, cols }).catch((err) => {
+      console.error("Failed to connect session:", err);
     });
   }
 
@@ -224,14 +254,7 @@
       termOpened = true;
       // Connect PTY at the measured size to avoid intermediate resizes
       // that cause extra newlines on restart.
-      connected = true;
-      command("connect_session", {
-        sessionId,
-        rows: term.rows,
-        cols: term.cols,
-      }).catch((err) => {
-        console.error("Failed to connect session:", err);
-      });
+      connectWithHistory(term.rows, term.cols);
     }
 
     // Listen for session status changes
@@ -306,14 +329,7 @@
 
         // Connect PTY if this terminal was hidden on mount
         if (!connected) {
-          connected = true;
-          command("connect_session", {
-            sessionId,
-            rows: term.rows,
-            cols: term.cols,
-          }).catch((err: unknown) => {
-            console.error("Failed to connect session:", err);
-          });
+          connectWithHistory(term.rows, term.cols);
         }
 
         // Force full repaint — canvas content may be stale after display:none

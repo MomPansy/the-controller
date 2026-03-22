@@ -1,7 +1,9 @@
 use base64::Engine;
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use std::collections::HashMap;
+use std::fs;
 use std::io::{Read, Write};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use uuid::Uuid;
@@ -42,6 +44,8 @@ impl PtyManager {
     /// otherwise falls back to a direct PTY (production path).
     /// When `continue_session` is true, passes `--continue` to claude to resume
     /// the last conversation in the working directory.
+    /// If `log_path` is Some, all PTY output is appended to that file using a
+    /// 4-byte LE length-prefixed binary format.
     #[allow(clippy::too_many_arguments)]
     pub fn spawn_session(
         &mut self,
@@ -53,6 +57,7 @@ impl PtyManager {
         initial_prompt: Option<&str>,
         rows: u16,
         cols: u16,
+        log_path: Option<PathBuf>,
     ) -> Result<(), String> {
         // Skip if already connected
         if self.sessions.contains_key(&session_id) {
@@ -79,7 +84,7 @@ impl PtyManager {
             // produce extra newlines).
             let _ = TmuxManager::resize_session(session_id, cols, rows);
             // Attach to the tmux session via a local PTY
-            self.attach_tmux_session(session_id, emitter)
+            self.attach_tmux_session(session_id, emitter, log_path)
         } else {
             // No tmux — spawn the command directly in a PTY
             self.spawn_direct_session(
@@ -90,6 +95,7 @@ impl PtyManager {
                 initial_prompt,
                 rows,
                 cols,
+                log_path,
             )
         }
     }
@@ -105,6 +111,7 @@ impl PtyManager {
         initial_prompt: Option<&str>,
         rows: u16,
         cols: u16,
+        log_path: Option<PathBuf>,
     ) -> Result<(), String> {
         let pty_system = native_pty_system();
         let pair = pty_system
@@ -154,6 +161,9 @@ impl PtyManager {
         let status_event = format!("session-status-changed:{}", session_id);
 
         thread::spawn(move || {
+            let mut log_file = log_path.and_then(|p| {
+                fs::OpenOptions::new().create(true).append(true).open(&p).ok()
+            });
             let mut buf = [0u8; 4096];
             loop {
                 match reader.read(&mut buf) {
@@ -165,6 +175,11 @@ impl PtyManager {
                         break;
                     }
                     Ok(n) => {
+                        if let Some(ref mut f) = log_file {
+                            let len = n as u32;
+                            let _ = f.write_all(&len.to_le_bytes());
+                            let _ = f.write_all(&buf[..n]);
+                        }
                         let encoded = base64::engine::general_purpose::STANDARD.encode(&buf[..n]);
                         let _ = emitter.emit(&output_event, &encoded);
                     }
@@ -196,6 +211,7 @@ impl PtyManager {
         &mut self,
         session_id: Uuid,
         emitter: Arc<dyn EventEmitter>,
+        log_path: Option<PathBuf>,
     ) -> Result<(), String> {
         let tmux_name = TmuxManager::session_name(session_id);
 
@@ -241,6 +257,9 @@ impl PtyManager {
         let status_event = format!("session-status-changed:{}", session_id);
 
         thread::spawn(move || {
+            let mut log_file = log_path.and_then(|p| {
+                fs::OpenOptions::new().create(true).append(true).open(&p).ok()
+            });
             let mut buf = [0u8; 4096];
             loop {
                 match reader.read(&mut buf) {
@@ -252,6 +271,11 @@ impl PtyManager {
                         break;
                     }
                     Ok(n) => {
+                        if let Some(ref mut f) = log_file {
+                            let len = n as u32;
+                            let _ = f.write_all(&len.to_le_bytes());
+                            let _ = f.write_all(&buf[..n]);
+                        }
                         let encoded = base64::engine::general_purpose::STANDARD.encode(&buf[..n]);
                         let _ = emitter.emit(&output_event, &encoded);
                     }
@@ -628,7 +652,7 @@ mod tests {
         let session_id = Uuid::new_v4();
 
         manager
-            .attach_tmux_session(session_id, NoopEmitter::new())
+            .attach_tmux_session(session_id, NoopEmitter::new(), None)
             .expect("attach should use the resolved tmux binary");
 
         assert!(wait_for_log_entry(&log_path, "display-message"));
