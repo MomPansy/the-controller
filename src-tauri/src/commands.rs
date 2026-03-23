@@ -1897,6 +1897,7 @@ pub async fn load_conversation_history(
     state: State<'_, AppState>,
     project_id: String,
     session_id: String,
+    cols: Option<u16>,
 ) -> Result<String, String> {
     let project_uuid = Uuid::parse_str(&project_id).map_err(|e| e.to_string())?;
     let session_uuid = Uuid::parse_str(&session_id).map_err(|e| e.to_string())?;
@@ -1927,7 +1928,7 @@ pub async fn load_conversation_history(
         Err(_) => return Ok(String::new()),
     };
 
-    let rendered = crate::conversation_history::render_history_as_terminal(&entries, 120);
+    let rendered = crate::conversation_history::render_history_as_terminal(&entries, cols.unwrap_or(120));
 
     use base64::Engine;
     Ok(base64::engine::general_purpose::STANDARD.encode(rendered.as_bytes()))

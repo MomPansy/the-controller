@@ -17,9 +17,6 @@ pub enum ConversationEntry {
         tool: String,
         input_summary: String,
     },
-    ToolResult {
-        content: String,
-    },
 }
 
 /// Load conversation history for a Claude Code session by finding the most
@@ -171,6 +168,20 @@ fn extract_assistant_content(v: &serde_json::Value, timestamp: &str) -> Vec<Conv
     entries
 }
 
+/// Truncate a string to at most `max_len` characters, appending "..." if truncated.
+/// Uses char boundaries so it never panics on multi-byte UTF-8.
+fn truncate_str(s: &str, max_len: usize) -> String {
+    if s.chars().count() <= max_len {
+        return s.to_string();
+    }
+    let end = s
+        .char_indices()
+        .nth(max_len - 3)
+        .map(|(i, _)| i)
+        .unwrap_or(s.len());
+    format!("{}...", &s[..end])
+}
+
 /// Create a short summary of tool input for display.
 fn summarize_tool_input(input: Option<&serde_json::Value>) -> String {
     let input = match input {
@@ -183,20 +194,10 @@ fn summarize_tool_input(input: Option<&serde_json::Value>) -> String {
         let mut parts = Vec::new();
         for (key, val) in obj {
             let val_str = match val {
-                serde_json::Value::String(s) => {
-                    if s.len() > 80 {
-                        format!("{}...", &s[..77])
-                    } else {
-                        s.clone()
-                    }
-                }
+                serde_json::Value::String(s) => truncate_str(s, 80),
                 other => {
                     let s = other.to_string();
-                    if s.len() > 80 {
-                        format!("{}...", &s[..77])
-                    } else {
-                        s
-                    }
+                    truncate_str(&s, 80)
                 }
             };
             parts.push(format!("{key}: {val_str}"));
@@ -231,15 +232,8 @@ pub fn render_history_as_terminal(entries: &[ConversationEntry], cols: u16) -> S
                 input_summary,
             } => {
                 let line = format!("  \u{27E1} {tool}: {input_summary}");
-                let truncated = if line.len() > 120 {
-                    format!("{}...", &line[..117])
-                } else {
-                    line
-                };
+                let truncated = truncate_str(&line, 120);
                 output.push_str(&format!("\x1b[2m{truncated}\x1b[0m\r\n"));
-            }
-            ConversationEntry::ToolResult { .. } => {
-                // Skip — too verbose
             }
         }
     }
@@ -526,14 +520,6 @@ mod tests {
         // The dim escape + content + reset should be bounded
     }
 
-    #[test]
-    fn test_render_skips_tool_result() {
-        let entries = vec![ConversationEntry::ToolResult {
-            content: "Should not appear".to_string(),
-        }];
-        let output = render_history_as_terminal(&entries, 80);
-        assert!(!output.contains("Should not appear"));
-    }
 
     #[test]
     fn test_word_wrap() {
@@ -580,9 +566,6 @@ mod tests {
             ConversationEntry::ToolUse {
                 tool: "Read".to_string(),
                 input_summary: "file_path: /src/main.rs".to_string(),
-            },
-            ConversationEntry::ToolResult {
-                content: "fn main() {}".to_string(),
             },
             ConversationEntry::Assistant {
                 content: "Fixed it.".to_string(),
