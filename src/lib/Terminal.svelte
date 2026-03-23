@@ -85,6 +85,40 @@
     });
   }
 
+  async function loadHistoryAndConnect() {
+    const match = get(projects).flatMap((p) =>
+      p.sessions.map((s) => ({ session: s, projectId: p.id }))
+    ).find((x) => x.session.id === sessionId);
+
+    if (match && term) {
+      try {
+        const history = await command("load_conversation_history", {
+          projectId: match.projectId,
+          sessionId,
+          cols: term.cols || 120,
+        });
+        if (history && term) {
+          const bytes = Uint8Array.from(atob(history as string), (c) => c.charCodeAt(0));
+          term.write(bytes);
+          term.write(new TextEncoder().encode("\r\n\x1b[90m─── live session ───\x1b[0m\r\n\r\n"));
+        }
+      } catch (err) {
+        console.error("Failed to load conversation history:", err);
+      }
+    }
+
+    if (term) {
+      connected = true;
+      command("connect_session", {
+        sessionId,
+        rows: term.rows,
+        cols: term.cols,
+      }).catch((err) => {
+        console.error("Failed to connect session:", err);
+      });
+    }
+  }
+
   const IMAGE_EXTENSIONS = new Set([
     ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp",
   ]);
@@ -101,7 +135,7 @@
       cursorBlink: true,
       fontSize: 13,
       fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-      scrollback: 10000,
+      scrollback: 50000,
       theme: {
         background: "#000000",
         foreground: "#e0e0e0",
@@ -222,16 +256,9 @@
     if (containerEl.offsetParent !== null) {
       fitAddon.fit();
       termOpened = true;
-      // Connect PTY at the measured size to avoid intermediate resizes
-      // that cause extra newlines on restart.
-      connected = true;
-      command("connect_session", {
-        sessionId,
-        rows: term.rows,
-        cols: term.cols,
-      }).catch((err) => {
-        console.error("Failed to connect session:", err);
-      });
+      // Load conversation history then connect PTY at the measured size
+      // to avoid intermediate resizes that cause extra newlines on restart.
+      loadHistoryAndConnect();
     }
 
     // Listen for session status changes
@@ -306,14 +333,7 @@
 
         // Connect PTY if this terminal was hidden on mount
         if (!connected) {
-          connected = true;
-          command("connect_session", {
-            sessionId,
-            rows: term.rows,
-            cols: term.cols,
-          }).catch((err: unknown) => {
-            console.error("Failed to connect session:", err);
-          });
+          loadHistoryAndConnect();
         }
 
         // Force full repaint — canvas content may be stale after display:none

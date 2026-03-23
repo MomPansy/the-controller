@@ -33,7 +33,7 @@ fn get_claude_token_usage(working_dir: &str) -> Result<Vec<TokenDataPoint>, Stri
 
 /// Derive the Claude Code project directory from a working directory path.
 /// Claude encodes the absolute path: `/` → `-`, `.` → `-`.
-fn claude_project_dir(working_dir: &str) -> Result<PathBuf, String> {
+pub(crate) fn claude_project_dir(working_dir: &str) -> Result<PathBuf, String> {
     let home = dirs::home_dir().ok_or("Cannot determine home directory")?;
     let claude_projects = home.join(".claude").join("projects");
     if !claude_projects.exists() {
@@ -66,7 +66,7 @@ fn claude_project_dir(working_dir: &str) -> Result<PathBuf, String> {
 }
 
 /// Find the most recently modified `.jsonl` file in a directory.
-fn most_recent_jsonl(dir: &Path) -> Result<PathBuf, String> {
+pub(crate) fn most_recent_jsonl(dir: &Path) -> Result<PathBuf, String> {
     let entries = fs::read_dir(dir).map_err(|e| e.to_string())?;
     let mut best: Option<(PathBuf, std::time::SystemTime)> = None;
 

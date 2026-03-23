@@ -1892,6 +1892,48 @@ pub fn get_session_token_usage(
     token_usage::get_token_usage(working_dir, &session.kind)
 }
 
+#[tauri::command]
+pub async fn load_conversation_history(
+    state: State<'_, AppState>,
+    project_id: String,
+    session_id: String,
+    cols: Option<u16>,
+) -> Result<String, String> {
+    let project_uuid = Uuid::parse_str(&project_id).map_err(|e| e.to_string())?;
+    let session_uuid = Uuid::parse_str(&session_id).map_err(|e| e.to_string())?;
+
+    let storage = state.storage.lock().map_err(|e| e.to_string())?;
+    let project = storage
+        .load_project(project_uuid)
+        .map_err(|e| e.to_string())?;
+
+    let session = project
+        .sessions
+        .iter()
+        .find(|s| s.id == session_uuid)
+        .ok_or_else(|| "Session not found".to_string())?;
+
+    // Only works for claude sessions
+    if session.kind != "claude" {
+        return Ok(String::new());
+    }
+
+    let working_dir = session
+        .worktree_path
+        .as_deref()
+        .unwrap_or(&project.repo_path);
+
+    let entries = match crate::conversation_history::load_conversation_history(working_dir) {
+        Ok(e) => e,
+        Err(_) => return Ok(String::new()),
+    };
+
+    let rendered = crate::conversation_history::render_history_as_terminal(&entries, cols.unwrap_or(120));
+
+    use base64::Engine;
+    Ok(base64::engine::general_purpose::STANDARD.encode(rendered.as_bytes()))
+}
+
 /// Walk commits on the worktree branch that aren't on the main branch.
 fn discover_branch_commits(worktree_path: &str) -> Result<Vec<CommitInfo>, String> {
     let repo = git2::Repository::discover(worktree_path)

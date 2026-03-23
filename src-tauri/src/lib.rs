@@ -5,6 +5,7 @@ pub mod auto_worker;
 pub mod cli_install;
 pub mod commands;
 pub mod config;
+pub mod conversation_history;
 pub mod deploy;
 pub mod emitter;
 pub mod labels;
@@ -136,6 +137,7 @@ pub fn run() {
             commands::unstage_session,
             commands::get_repo_head,
             commands::get_session_token_usage,
+            commands::load_conversation_history,
             deploy::commands::detect_project_type,
             deploy::commands::get_deploy_credentials,
             deploy::commands::save_deploy_credentials,
